@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>项目差异比较工具</title>
+        <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+        <script src="js/jquery-1.12.3.min.js"></script>
+        <script src="bootstrap/js/bootstrap.min.js"></script>
+        <script src="js/layer/layer.js"></script>
+        <script>
+            jQuery(function ($) {
+                $('table#diffFiles caption .statistics [data-toggle="tooltip"]').tooltip();
+                $('form .btn').click(function () {
+                    var layerIndex = layer.msg('加载中', {
+                        time: 0,
+                        icon: 16,
+                        shade: 0.01
+                    });
+                    var sourcePath = $('#sourcePath').val();
+                    var destinationPath = $('#destinationPath').val();
+                    $('table#diffFiles').addClass('hidden');
+                    $('table#diffFiles tbody').empty();
+                    $.ajax({
+                        url: 'diff_project.php',
+                        type: 'POST',
+                        data: {
+                            sourcePath: sourcePath,
+                            destinationPath: destinationPath
+                        },
+                        dataType: 'json',
+                        timeout: 0,
+                        success: function (data, textStatus) {
+                            if (data.code === 0) {
+                                $('table#diffFiles').removeClass('hidden');
+                                $('table#diffFiles caption .statistics .glyphicon-file').text(data.data.sourceCount + '/' + data.data.destinationCount);
+                                var diffCount = data.data.addedCount + data.data.modifiedCount + data.data.deletedCount;
+                                $('table#diffFiles caption .statistics .progress').attr('data-original-title', '添加 ' + data.data.addedCount + '、修改 ' + data.data.modifiedCount + '、删除 ' + data.data.deletedCount + '');
+                                $('table#diffFiles caption .statistics .progress-bar-success').css('width', (data.data.addedCount / (diffCount ? diffCount : 1) * 100) + '%');
+                                $('table#diffFiles caption .statistics .progress-bar-success span').text(data.data.addedCount);
+                                $('table#diffFiles caption .statistics .progress-bar-warning').css('width', (data.data.modifiedCount / (diffCount ? diffCount : 1) * 100) + '%');
+                                $('table#diffFiles caption .statistics .progress-bar-warning span').text(data.data.modifiedCount);
+                                $('table#diffFiles caption .statistics .progress-bar-danger').css('width', (data.data.deletedCount / (diffCount ? diffCount : 1) * 100) + '%');
+                                $('table#diffFiles caption .statistics .progress-bar-danger span').text(data.data.deletedCount);
+                                $('table#diffFiles caption .statistics .btn-link').attr('href', 'diff_project.php?sourcePath=' + sourcePath + '&destinationPath=' + destinationPath + '&export=1');
+                                var files = data.data.added;
+                                for (file in files) {
+                                    $('table#diffFiles tbody').append(
+                                            $('<tr></tr>')
+                                            .addClass('success')
+                                            .append('<td><span class="glyphicon glyphicon-plus-sign" aria-hidden="true"></span> ' + file + '</td>')
+                                            .append('<td>' + files[file] + '</td>')
+                                            .append('<td>&nbsp;</td>'));
+                                }
+                                files = data.data.modified;
+                                for (file in files) {
+                                    var diffUnified = $('<a></a>')
+                                            .addClass('btn btn-link btn-diff')
+                                            .attr('href', 'javascript:;')
+                                            .attr('data-link', 'diff_file.php?renderer=Unified&sourcePath=' + sourcePath + '&destinationPath=' + destinationPath + '&file=' + file)
+                                            .text('统一');
+                                    var diffContext = $('<a></a>')
+                                            .addClass('btn btn-link btn-diff')
+                                            .attr('href', 'javascript:;')
+                                            .attr('data-link', 'diff_file.php?renderer=Context&sourcePath=' + sourcePath + '&destinationPath=' + destinationPath + '&file=' + file)
+                                            .text('上下文');
+                                    var diffInlineHTML = $('<a></a>')
+                                            .addClass('btn btn-link btn-diff')
+                                            .attr('href', 'javascript:;')
+                                            .attr('data-link', 'diff_file.php?renderer=InlineHTML&sourcePath=' + sourcePath + '&destinationPath=' + destinationPath + '&file=' + file)
+                                            .text('内联HTML');
+                                    var diffSidebySideHTML = $('<a></a>')
+                                            .addClass('btn btn-link btn-diff')
+                                            .attr('href', 'javascript:;')
+                                            .attr('data-link', 'diff_file.php?renderer=SidebySideHTML&sourcePath=' + sourcePath + '&destinationPath=' + destinationPath + '&file=' + file)
+                                            .text('并排HTML');
+                                    var diffAll = $('<div></div>').append(diffUnified).append(diffContext).append(diffInlineHTML).append(diffSidebySideHTML);
+                                    $('table#diffFiles tbody').append(
+                                            $('<tr></tr>')
+                                            .addClass('warning')
+                                            .append('<td><span class="glyphicon glyphicon-edit" aria-hidden="true"></span> ' + file + '</td>')
+                                            .append('<td>' + files[file] + '</td>')
+                                            .append('<td>' + diffAll.html() + '</td>'));
+                                }
+                                files = data.data.deleted;
+                                for (file in files) {
+                                    $('table#diffFiles tbody').append(
+                                            $('<tr></tr>')
+                                            .addClass('danger')
+                                            .append('<td><span class="glyphicon glyphicon-trash" aria-hidden="true"></span> ' + file + '</td>')
+                                            .append('<td>' + files[file] + '</td>')
+                                            .append('<td>&nbsp;</td>'));
+                                }
+                                $('table#diffFiles tbody .btn-diff').click(function () {
+                                    var index = layer.open({
+                                        title: '文件差异比较工具',
+                                        type: 2,
+                                        area: ['700px', '450px'],
+                                        fixed: false, //不固定
+                                        maxmin: true,
+                                        content: $(this).attr('data-link')
+                                    });
+                                    layer.full(index);
+                                });
+                            } else {
+                                layer.msg(data.msg, {icon: 5});
+                            }
+                            layer.close(layerIndex);
+                        },
+                        error: function (xhr, textStatus, errorThrown) {
+                            layer.msg('请求出错！<br />响应状态：' + xhr.statusText + '（' + xhr.status + '）<br />错误信息：' + textStatus, {icon: 5});
+                            layer.close(layerIndex);
+                        }
+                    });
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="text-center">项目差异比较工具</h1>
+            <p>&nbsp;</p>
+            <form class="form-horizontal" action="" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="sourcePath" class="col-sm-2 control-label">源项目路径</label>
+                    <div class="col-sm-10">
+                        <input type="text" class="form-control" id="sourcePath" placeholder="项目路径">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="destinationPath" class="col-sm-2 control-label">目标项目路径</label>
+                    <div class="col-sm-10">
+                        <input type="text" class="form-control" id="destinationPath" placeholder="项目路径">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                        <button type="submit" class="btn btn-primary">确定</button>
+                    </div>
+                </div>
+            </form>
+            <table class="table table-hover table-condensed hidden" id="diffFiles">
+                <caption class="text-center h4">
+                    <p><strong>差异文件列表</strong></p>
+                    <p><small>目标项目相对于源项目</small></p>
+                    <hr />
+                    <div class="statistics">
+                        <div class="col-sm-2">
+                            <span class="glyphicon glyphicon-file text-info" data-toggle="tooltip" data-placement="bottom" title="源项目/目标项目">0/0</span>
+                        </div>
+                        <div class="col-sm-8">
+                            <div class="progress" data-toggle="tooltip" data-placement="bottom" title="添加 0、修改 0、删除 0">
+                                <div class="progress-bar progress-bar-success progress-bar-striped active" style="width: 0%;">
+                                    <span class="glyphicon glyphicon-plus-sign">0</span>
+                                </div>
+                                <div class="progress-bar progress-bar-warning progress-bar-striped active" style="width: 0%;">
+                                    <span class="glyphicon glyphicon-edit">0</span>
+                                </div>
+                                <div class="progress-bar progress-bar-danger progress-bar-striped active" style="width: 0%;">
+                                    <span class="glyphicon glyphicon-trash">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-2">
+                            <a target="_blank" href="javascript:;" class="btn btn-link"><span class="glyphicon glyphicon-export" aria-hidden="true"></span> 导出差异文件</a>
+                        </div>
+                    </div>
+                </caption>
+                <thead>
+                    <tr class="active">
+                        <th>文件</th>
+                        <th>md5</th>
+                        <th>差异比较</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+    </body>
+</html>
